@@ -48,4 +48,5 @@ def server_input():
 
 threading.Thread(target=server_input, daemon=True).start()
 
-app.run(debug=True, port=1928)
+if __name__ == "__main__":
+    app.run(debug=True, port=1928)
