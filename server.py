@@ -1,52 +1,33 @@
-from flask import Flask
-from flask_sock import Sock
-import json
-import threading
+import asyncio
+import websockets
+import os
 
-app = Flask(__name__)
-sock = Sock(app)
+connected_clients = set()
 
-clients = []
-
-
-@sock.route("/ws")
-def websocket(ws):
-    clients.append(ws)
-
-    print("Client connected!")
+async def handler(websocket):
+    connected_clients.add(websocket)
+    print(f"عميل جديد اتصل. العدد الحالي: {len(connected_clients)}")
 
     try:
-        while True:
-            message = ws.receive()
-
-            if message is None:
-                break
-
-            data = json.loads(message)
-            print("Client:", data)
-
+        async for message in websocket:
+            print(f"استلمت: {message}")
+            if connected_clients:
+                await asyncio.gather(
+                    *[client.send(message) for client in connected_clients if client != websocket],
+                    return_exceptions=True
+                )
+    except websockets.exceptions.ConnectionClosed:
+        pass
     finally:
-        clients.remove(ws)
-        print("Client disconnected!")
+        connected_clients.discard(websocket)
+        print(f"عميل خرج. العدد الحالي: {len(connected_clients)}")
 
 
-def server_input():
-    while True:
-        message = input("Server > ")
-
-        data = {
-            "type": "server_message",
-            "message": message
-        }
-
-        for ws in clients:
-            try:
-                ws.send(json.dumps(data))
-            except:
-                pass
-
-
-threading.Thread(target=server_input, daemon=True).start()
+async def main():
+    port = int(os.environ.get("PORT", 8765))
+    async with websockets.serve(handler, "0.0.0.0", port):
+        print(f"السيرفر شغال على بورت {port}")
+        await asyncio.Future()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=1928)
+    asyncio.run(main())
